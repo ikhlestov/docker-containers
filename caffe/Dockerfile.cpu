@@ -1,0 +1,50 @@
+FROM ubuntu:16.04
+
+LABEL maintainer khlyestovillarion@gmail.com
+
+ARG CAFFE_BRANCH=master
+ARG CAFFE_COMMIT=04ab089
+ENV CAFFE_ROOT=/root/caffe
+
+# install required dependencies
+RUN apt-get update && apt-get install -y \
+    python-dev \
+    python-pip \
+    cmake \
+    git \
+    libatlas-base-dev \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    libhdf5-serial-dev \
+    libleveldb-dev \
+    liblmdb-dev \
+    libopencv-dev \
+    libprotobuf-dev \
+    libsnappy-dev \
+    protobuf-compiler
+RUN apt-get install --no-install-recommends -y libboost-all-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --upgrade pip --no-cache-dir
+
+# build caffe
+WORKDIR $CAFFE_ROOT
+RUN git clone -b ${CAFFE_BRANCH} --depth 1 https://github.com/BVLC/caffe.git . && \
+    git checkout ${CAFFE_COMMIT} && \
+    pip install -r python/requirements.txt --upgrade --no-cache-dir && \
+    mkdir build && cd build && \
+    cmake -DCPU_ONLY=1 .. && \
+    make -j"$(nproc)" all && \
+    make install && \
+    make runtest
+
+# dirty fix. Caffe is build with system protobuf, but python version is updated to the newest one
+# so let's downgrade it
+RUN pip install protobuf==3.0.0b2
+
+# Post setup
+ENV PYCAFFE_ROOT=$CAFFE_ROOT/python
+ENV PYTHONPATH=$PYCAFFE_ROOT:$PYTHONPATH
+ENV PATH=$CAFFE_ROOT/build/tools:$PYCAFFE_ROOT:$PATH
+RUN echo "$CAFFE_ROOT/build/lib" >> /etc/ld.so.conf.d/caffe.conf && ldconfig
+
+CMD ["/bin/bash"]
