@@ -1,1 +1,1 @@
-This is a mirror of the official [caffe docker container](https://hub.docker.com/r/bvlc/caffe) but compilled with latest changes.
+This is a mirror of the official [caffe docker containers](https://hub.docker.com/r/bvlc/caffe) but compiled with the latest changes. GPU version doesn't support docker auto build due to memory limitations. So build it manually from Dockerfile.gpu.

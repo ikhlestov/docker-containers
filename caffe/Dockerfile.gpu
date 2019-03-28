@@ -39,8 +39,7 @@ RUN git clone -b ${CAFFE_BRANCH} --depth 1 https://github.com/BVLC/caffe.git . &
     pip install -r python/requirements.txt --upgrade && \
     mkdir build && cd build && \
     cmake -DUSE_CUDNN=1 -DUSE_NCCL=1 .. && \
-    # make -j"$(nproc)" all && \
-    make all && \
+    make -j"$(nproc)" all && \
     make install
 
 # unfortunatelly, it's impossible to run tests without provided nvidia runtime
