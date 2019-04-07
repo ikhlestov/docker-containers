@@ -7,24 +7,42 @@ ARG CAFFE_COMMIT=04ab089
 ENV CAFFE_ROOT=/root/caffe
 
 # install required dependencies
-RUN apt-get update && apt-get install -y \
-    python-dev \
-    python-pip \
-    cmake \
-    git \
-    libatlas-base-dev \
-    libgflags-dev \
-    libgoogle-glog-dev \
-    libhdf5-serial-dev \
-    libleveldb-dev \
-    liblmdb-dev \
-    libopencv-dev \
-    libprotobuf-dev \
-    libsnappy-dev \
-    protobuf-compiler
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+        build-essential \
+        cmake \
+        curl \
+        gfortran \
+        git \
+        hdf5-tools \
+        libatlas-base-dev \
+        libboost-all-dev \
+        libgflags-dev \
+        libgoogle-glog-dev \
+        libgoogle-glog0v5 \
+        libhdf5-serial-dev \
+        libleveldb-dev \
+        liblmdb-dev \
+        libopencv-core-dev \
+        libopencv-dev \
+        libopencv-highgui-dev \
+        libprotobuf-dev \
+        libprotoc-dev \
+        libsnappy-dev \
+        libsnappy-dev \
+        libstdc++6-4.8-dbg \
+        opencl-headers \
+        protobuf-compiler \
+        python-dev
+    # ln -s /usr/lib/x86_64-linux-gnu/libhdf5_serial.so.10.1.0 /usr/lib/x86_64-linux-gnu/libhdf5.so && \
+    # ln -s /usr/lib/x86_64-linux-gnu/libhdf5_serial_hl.so.10.0.2 /usr/lib/x86_64-linux-gnu/libhdf5_hl.so
 RUN apt-get install --no-install-recommends -y libboost-all-dev && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip install --upgrade pip --no-cache-dir
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python get-pip.py && \
+    rm get-pip.py
 
 RUN git clone https://github.com/NVIDIA/nccl.git && \
     cd nccl && \
@@ -32,22 +50,27 @@ RUN git clone https://github.com/NVIDIA/nccl.git && \
     cd .. && \
     rm -rf nccl
 
-# build caffe
 WORKDIR $CAFFE_ROOT
-RUN git clone -b ${CAFFE_BRANCH} --depth 1 https://github.com/BVLC/caffe.git . && \
-    git checkout ${CAFFE_COMMIT} && \
-    pip install -r python/requirements.txt --upgrade && \
-    mkdir build && cd build && \
-    cmake -DUSE_CUDNN=1 -DUSE_NCCL=1 .. && \
-    make -j"$(nproc)" all && \
-    make install
+RUN git clone -b ${CAFFE_BRANCH} https://github.com/BVLC/caffe.git . && \
+    git reset --hard ${CAFFE_COMMIT} && \
+    for req in $(cat python/requirements.txt); do pip install $req; done && \
+    pip install protobuf==2.6.1 && \
+    cp Makefile.config.example Makefile.config && \
+    sed -i '/^# WITH_PYTHON_LAYER := 1/s/^# //' Makefile.config && \
+    sed -i 's+/usr/lib/python2.7/dist-packages/numpy/core/include+/usr/local/lib/python2.7/dist-packages/numpy/core/include+g' Makefile.config && \
+    sed -i 's+/usr/local/include+/usr/local/include /usr/include/hdf5/serial+g' Makefile.config && \
+    # sed -i 's+/usr/local/cuda+/usr/local/cuda-8.0+g' Makefile.config && \
+    # sed -i 's/NVCCFLAGS +=/NVCCFLAGS += -D_FORCE_INLINES/g' Makefile.config && \
+    sed -i 's+/usr/local/lib /usr/lib+/usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu/hdf5/serial+g' Makefile.config && \
+    make -j"$(nproc)" all py && \
+    make pycaffe && \
+    make -j"$(nproc)" test && \
+    # make runtest && \  # unfortunatelly, it's impossible to run tests without provided nvidia runtime
+    make distribute
 
-# unfortunatelly, it's impossible to run tests without provided nvidia runtime
-# RUN make runtest
-
-# dirty fix. Caffe is build with system protobuf, but python version is updated to the newest one
-# so let's downgrade it
-RUN pip install protobuf==3.0.0b2
+# was not updated
+# # ---[ Includes
+# set(${CMAKE_CXX_FLAGS} "-D_FORCE_INLINES ${CMAKE_CXX_FLAGS}")
 
 # Post setup
 ENV PYCAFFE_ROOT=$CAFFE_ROOT/python
